@@ -33,6 +33,8 @@ public partial class MeshDeformationSystem: SystemBase
 #endif
 	
 	SparseUploader sparseUploader;
+	//	Small dummy raw compute buffer to calm down SparseUploader initialization
+	GraphicsBuffer dummyRawGB;
 	FrameFencedGPUBufferPool<SkinMatrix> frameSkinMatricesBuffer;
 	FrameFencedGPUBufferPool<float> frameBlendShapeWeightsBuffer;
 	FrameFencedGPUBufferPool<MeshFrameDeformationDescription> frameMeshDeformationDescriptionBuffer;
@@ -83,7 +85,9 @@ public partial class MeshDeformationSystem: SystemBase
 		frameSkinMatricesBuffer = new (0xffff, GraphicsBuffer.Target.Raw, GraphicsBuffer.UsageFlags.None);
 		frameBlendShapeWeightsBuffer = new (0xffff, GraphicsBuffer.Target.Structured, GraphicsBuffer.UsageFlags.LockBufferForWrite);
 		frameMeshDeformationDescriptionBuffer = new (0xffff, GraphicsBuffer.Target.Structured, GraphicsBuffer.UsageFlags.LockBufferForWrite);
-		sparseUploader = new (null);
+		
+		dummyRawGB = new (GraphicsBuffer.Target.Raw, GraphicsBuffer.UsageFlags.None, 1, 4);
+		sparseUploader = new (dummyRawGB);
 		
 		activeDeformedEntitiesQuery = SystemAPI.QueryBuilder()
 			.WithAll<SkinnedMeshRendererComponent>()
@@ -120,6 +124,7 @@ public partial class MeshDeformationSystem: SystemBase
 		frameSkinMatricesBuffer?.Dispose();
 		frameBlendShapeWeightsBuffer?.Dispose();
 		sparseUploader.Dispose();
+		dummyRawGB.Dispose();
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

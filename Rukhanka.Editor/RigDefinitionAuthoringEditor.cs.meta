@@ -4,8 +4,7 @@ MonoImporter:
   externalObjects: {}
   serializedVersion: 2
   defaultReferences:
-  - inspectorXML: {fileID: 9197481963319205126, guid: ee3ab97b70e34ed4ca47b0e41326f564,
-      type: 3}
+  - inspectorXML: {fileID: 9197481963319205126, guid: ee3ab97b70e34ed4ca47b0e41326f564, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
@@ -15,6 +14,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 298480
   packageName: Rukhanka Animation System 2
-  packageVersion: 2.8.0
+  packageVersion: 2.9.0
   assetPath: Packages/com.rukhanka.animation/Rukhanka.Editor/RigDefinitionAuthoringEditor.cs
-  uploadId: 860362
+  uploadId: 897522

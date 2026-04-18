@@ -99,7 +99,7 @@ public static partial class ScriptedAnimator
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public static NativeList<MotionIndexAndWeight> ComputeBlendTree2DSimpleDirectional(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
+    public static NativeList<MotionIndexAndWeight> ComputeBlendTree2DSimpleDirectional(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
     {
 		var rv = new NativeList<MotionIndexAndWeight>(Allocator.Temp);
 
@@ -208,7 +208,7 @@ public static NativeList<MotionIndexAndWeight> ComputeBlendTree2DSimpleDirection
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public static unsafe NativeList<MotionIndexAndWeight> ComputeBlendTree2DFreeformCartesian(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
+	public static unsafe NativeList<MotionIndexAndWeight> ComputeBlendTree2DFreeformCartesian(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
 	{
 		var p = blendTreeParameter;
 		Span<float> hpArr = stackalloc float[blendTreePositions.Length];
@@ -289,7 +289,7 @@ public static unsafe NativeList<MotionIndexAndWeight> ComputeBlendTree2DFreeform
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public static unsafe NativeList<MotionIndexAndWeight> ComputeBlendTree2DFreeformDirectional(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
+	public static unsafe NativeList<MotionIndexAndWeight> ComputeBlendTree2DFreeformDirectional(in ReadOnlySpan<BlendTree2DMotionElement> blendTreePositions, float2 blendTreeParameter)
 	{
 		var p = blendTreeParameter;
 		var lp = math.length(p);

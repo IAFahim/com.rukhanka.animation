@@ -82,8 +82,8 @@ public partial class BoneVisualizationSystem: SystemBase
 		var defaultColor = new float4(0, 1, 1, 1);
 		var boneColorLines = hasDCC ? dcc.cpuRigColor : defaultColor;
 		var boneColorTriangles = new float4(defaultColor.x, defaultColor.y, defaultColor.z, defaultColor.w * 0.3f);
-		var boneColorLinesUINT = Drawer.ColorToUINT(boneColorLines);
-		var boneColorTriUINT = Drawer.ColorToUINT(boneColorTriangles);
+		var boneColorLinesUINT = ColorTools.ToUint(boneColorLines);
+		var boneColorTriUINT = ColorTools.ToUint(boneColorTriangles);
 		
 		var renderBonesJob = new RenderBonesCPUAnimatorsJob()
 		{

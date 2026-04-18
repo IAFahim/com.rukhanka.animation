@@ -87,8 +87,7 @@ ModelImporter:
     resampleCurves: 1
     optimizeGameObjects: 0
     motionNodeName: 
-    rigImportErrors: "Avatar creation failed:\n\tCannot find root motion transform
-      'Staff_RightHand_Attach'.\n"
+    rigImportErrors: "Avatar creation failed:\n\tCannot find root motion transform 'Staff_RightHand_Attach'.\n"
     rigImportWarnings: 
     animationImportErrors: 
     animationImportWarnings: 
@@ -161,6 +160,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 298480
   packageName: Rukhanka Animation System 2
-  packageVersion: 2.8.0
+  packageVersion: 2.9.0
   assetPath: Packages/com.rukhanka.animation/Samples~/Samples/SampleAssets/Ellen/Weapons/Models/Staff.fbx
-  uploadId: 860362
+  uploadId: 897522

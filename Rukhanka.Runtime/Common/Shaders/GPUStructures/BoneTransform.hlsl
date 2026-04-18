@@ -28,6 +28,14 @@ struct BoneTransform
 
 /////////////////////////////////////////////////////////////////////////////////
 
+    static BoneTransform Zero()
+    {
+        BoneTransform rv = (BoneTransform)0;
+        return rv;
+    }
+
+/////////////////////////////////////////////////////////////////////////////////
+
     static BoneTransform FromMatrix(float3x4 m)
     {
         BoneTransform rv;

@@ -5,8 +5,6 @@ using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
-using Hash128 = Unity.Entities.Hash128;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,7 +18,7 @@ public partial struct AnimationProcessSystem: ISystem
 	EntityQuery animatedObjectQuery;
 
 	NativeList<int2> bonePosesOffsetsArr;
-
+	
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	[BurstCompile]
@@ -150,6 +148,7 @@ public partial struct AnimationProcessSystem: ISystem
 		var rigDefinitionLookup = SystemAPI.GetComponentLookup<RigDefinitionComponent>(true);
 		var gpuAnimationEngineTagLookup = SystemAPI.GetComponentLookup<GPUAnimationEngineTag>(true);
 		var parentComponentLookup = SystemAPI.GetComponentLookup<Parent>();
+		var ptmComponentLookup = SystemAPI.GetComponentLookup<PostTransformMatrix>(true);
 			
 		//	Now take available entity transforms as ref poses overrides
 		var copyEntityBoneTransforms = new CopyEntityBoneTransformsToAnimationBuffer()
@@ -158,7 +157,8 @@ public partial struct AnimationProcessSystem: ISystem
 			boneTransformFlags = runtimeData.boneTransformFlagsHolderArr,
 			animatedBoneTransforms = runtimeData.animatedBonesBuffer,
 			parentComponentLookup = parentComponentLookup,
-			gpuAnimationEngineTagLookup = gpuAnimationEngineTagLookup
+			gpuAnimationEngineTagLookup = gpuAnimationEngineTagLookup,
+			ptmComponentLookup = ptmComponentLookup,
 		};
 
 		var jh = copyEntityBoneTransforms.ScheduleParallel(dependsOn);

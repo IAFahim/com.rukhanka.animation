@@ -26,7 +26,7 @@ DeformedVertex GetDeformedVertexForMesh(uint vertexID, DeformedVertex originalVe
     
     uint vertexOffsetForMesh = vertexOffsetOrMeshIndex;
 #ifdef RUKHANKA_HALF_DEFORMED_DATA
-    PackedDeformedVertex vertexData = _DeformedMeshData[vertexOffsetForMesh + absoluteVertexIndex];
+    PackedDeformedVertex vertexData = _DeformedMeshData[vertexOffsetForMesh + vertexID];
     DeformedVertex rv = vertexData.Unpack();
 #else
     DeformedVertex rv = _DeformedMeshData[vertexOffsetForMesh + vertexID];

@@ -773,8 +773,7 @@ ModelImporter:
     hasTranslationDoF: 0
     hasExtraRoot: 1
     skeletonHasParents: 1
-  lastHumanDescriptionAvatarSource: {fileID: 9000000, guid: 2732fe64dd2799f439fb845921df626b,
-    type: 3}
+  lastHumanDescriptionAvatarSource: {fileID: 9000000, guid: 2732fe64dd2799f439fb845921df626b, type: 3}
   autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 2
   humanoidOversampling: 1
@@ -790,6 +789,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 298480
   packageName: Rukhanka Animation System 2
-  packageVersion: 2.8.0
+  packageVersion: 2.9.0
   assetPath: Packages/com.rukhanka.animation/Samples~/Samples/SampleAssets/Chomper/AnimationClips/@ChomperIdle.fbx
-  uploadId: 860362
+  uploadId: 897522

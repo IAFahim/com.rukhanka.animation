@@ -144,7 +144,7 @@ public struct FastAnimatorParameter
 
 	public unsafe int GetRuntimeParameterIndex(in BlobAssetReference<PerfectHashTableBlob> pt, in DynamicBuffer<AnimatorControllerParameterComponent> acpc)
 	{
-		var span = new ReadOnlySpan<AnimatorControllerParameterComponent>(acpc.GetUnsafePtr(), acpc.Length);
+		var span = new ReadOnlySpan<AnimatorControllerParameterComponent>(acpc.GetUnsafeReadOnlyPtr(), acpc.Length);
 		return GetRuntimeParameterIndex(hash, pt, span);
 	}
 
@@ -152,7 +152,7 @@ public struct FastAnimatorParameter
 
 	public unsafe int GetRuntimeParameterIndex(in DynamicBuffer<AnimatorControllerParameterComponent> acpc)
 	{
-		var span = new ReadOnlySpan<AnimatorControllerParameterComponent>(acpc.GetUnsafePtr(), acpc.Length);
+		var span = new ReadOnlySpan<AnimatorControllerParameterComponent>(acpc.GetUnsafeReadOnlyPtr(), acpc.Length);
 		return GetRuntimeParameterIndex(hash, span);
 	}
 }

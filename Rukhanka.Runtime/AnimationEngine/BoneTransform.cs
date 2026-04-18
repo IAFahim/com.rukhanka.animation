@@ -19,6 +19,15 @@ public struct BoneTransform
 		rot = lt.Rotation;
 		scale = lt.Scale;
 	}
+	
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	public BoneTransform(LocalTransform lt, in PostTransformMatrix ptm)
+	{
+		pos = lt.Position;
+		rot = lt.Rotation;
+		scale = lt.Scale * new float3(ptm.Value[0][0], ptm.Value[1][1], ptm.Value[2][2]);
+	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,6 +75,19 @@ public struct BoneTransform
 			pos = bt.pos * scale.x,
 			rot = bt.rot.value * scale.y,
 			scale = bt.scale * scale.z,
+		};
+		return rv;
+	}
+	
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	public static BoneTransform Add(in BoneTransform p0, in BoneTransform p1)
+	{
+		var rv = new BoneTransform()
+		{
+			pos = p0.pos + p1.pos,
+			rot = p0.rot.value + p1.rot.value,
+			scale = p0.scale + p1.scale
 		};
 		return rv;
 	}

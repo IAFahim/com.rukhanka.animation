@@ -1,6 +1,7 @@
 #if !RUKHANKA_NO_DEBUG_DRAWER
 using Rukhanka.DebugDrawer;
 #endif
+using Rukhanka.Toolbox;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
@@ -143,14 +144,14 @@ public partial class AnimationCullingContextUpdateSystem: SystemBase
         var rv = buildCullingContextJob.Schedule(dependsOn);
         
     #if (RUKHANKA_DEBUG_INFO && !RUKHANKA_NO_DEBUG_DRAWER)
-        actx.invisibleChunkColor = Drawer.ColorToUINT(acc.invisibleChunkColor);
-        actx.visibleChunkColor = Drawer.ColorToUINT(acc.visibleChunkColor);
-        actx.invisibleRendererColor = Drawer.ColorToUINT(acc.invisibleRendererColor);
-        actx.visibleRendererColor = Drawer.ColorToUINT(acc.visibleRendererColor);
+        actx.invisibleChunkColor = ColorTools.ToUint(acc.invisibleChunkColor);
+        actx.visibleChunkColor = ColorTools.ToUint(acc.visibleChunkColor);
+        actx.invisibleRendererColor = ColorTools.ToUint(acc.invisibleRendererColor);
+        actx.visibleRendererColor = ColorTools.ToUint(acc.visibleRendererColor);
         actx.drawSceneBoundingBoxes = acc.drawSceneBoundingBoxes;
         
         actx.drawCullingVolumes = acc.drawCullingVolumes;
-        actx.cullingVolumeColor = Drawer.ColorToUINT(acc.cullingVolumeColor);
+        actx.cullingVolumeColor = ColorTools.ToUint(acc.cullingVolumeColor);
     #endif
         return rv;
 	}

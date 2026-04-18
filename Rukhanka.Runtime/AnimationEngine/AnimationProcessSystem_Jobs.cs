@@ -40,7 +40,7 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 	
 	[NativeDisableParallelForRestriction]
 	public BufferLookup<RootMotionAnimationStateComponent> rootMotionAnimStateBufferLookup;
-
+	
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	[SkipLocalsInit]
@@ -67,27 +67,41 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 		if (rigDef.applyRootMotion && (rigBlobAsset.Value.rootBoneIndex == rigBoneIndex || rigBoneIndex == 0))
 			boneNameHash = ModifyBoneHashForRootMotion(boneNameHash);
 
-		//	Animations must be ordered by layer index
-		Span<float> layerWeights = stackalloc float[animationsToProcess[^1].layerIndex + 1];
-		var refPosWeight = CalculateFinalLayerWeights(layerWeights, animationsToProcess, rigBoneIndex, boneNameHash, rb.humanBodyPart);
-		float3 totalWeights = refPosWeight;
-
-		var blendedBonePose = BoneTransform.Scale(rb.refPose, refPosWeight);
-
 		var rootMotionDeltaBone = rigDef.applyRootMotion && rigBoneIndex == 0;
 		PrepareRootMotionStateBuffers(e, animationsToProcess, out var curRootMotionState, out var newRootMotionState, rootMotionDeltaBone);
-
-		for (int i = 0; i < animationsToProcess.Length; ++i)
+		
+		//	Reference pose for root motion delta should be identity
+		var refPose = Hint.Unlikely(rootMotionDeltaBone) ? BoneTransform.Identity() : rb.refPose;
+		
+		var blendedBonePose = refPose;
+		var layerPose = new BoneTransform();
+		var weightSum = 0.0f;
+		float3 layerFlags = 0;
+		float3 totalFlags = 0;
+		LayerInfo layerInfo = default;
+			
+		for (int ai = 0; ai < animationsToProcess.Length; ++ai)
 		{
-			var atp = animationsToProcess[i];
-			if (atp.animation == BlobAssetReference<AnimationClipBlob>.Null)
+			var atp = animationsToProcess[ai];
+			//	Root bone should be always included in animation computation
+			var inAvatarMask = IsBoneInAvatarMask(rigBoneIndex, rb.humanBodyPart, atp.avatarMask) || rootMotionDeltaBone;
+			if (atp.animation == BlobAssetReference<AnimationClipBlob>.Null || atp.weight == 0 || atp.layerWeight == 0 || !inAvatarMask)
 				continue;
-
+			
+			var curLayerInfo = GetLayerInfoFromAnimation(atp);
+			
+			//	Apply layer animations
+			if (layerInfo.index != curLayerInfo.index)
+			{
+				blendedBonePose = BlendLayerPose(blendedBonePose, layerPose, refPose, layerInfo, weightSum, layerFlags);
+				weightSum = 0;
+				layerFlags = 0;
+				layerPose = new BoneTransform();
+			}
+			layerInfo = curLayerInfo;
+			
 			var animTime = NormalizeAnimationTime(atp.time, ref atp.animation.Value);
 			ref var clipTracks = ref atp.animation.Value.clipTracks;
-
-			var layerWeight = layerWeights[atp.layerIndex];
-			if (layerWeight == 0) continue;
 
 			var boneHasAnimation = SampleAnimation
 			(
@@ -104,26 +118,82 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 			
 			if (boneHasAnimation)
 			{
-				SetTransformFlags(flags, transformFlags, rigBoneIndex);
-
-				float3 modWeight = flags * atp.weight * layerWeight;
-				totalWeights += math.select(modWeight, 0, false);
-
-				if (rootMotionDeltaBone)
+				if (Hint.Unlikely(rootMotionDeltaBone))
 					ProcessRootMotionDeltas(ref bonePose, ref clipTracks, trackRange, atp, curRootMotionState, ref newRootMotionState);
-				
-				MixPoses(ref blendedBonePose, bonePose, modWeight, atp.blendMode);
+				weightSum += atp.weight;
+				layerFlags += flags;
+				totalFlags += flags;
+				layerPose = AppendScaledPose(layerPose, bonePose, atp.weight);
 			}
 		}
-
-		//	Reference pose for root motion delta should be identity
-		var boneRefPose = Hint.Unlikely(rootMotionDeltaBone) ? BoneTransform.Identity() : rb.refPose;
 		
-		BoneTransformMakePretty(ref blendedBonePose, boneRefPose, totalWeights);
+		//	Apply top layer pose
+		blendedBonePose = BlendLayerPose(blendedBonePose, layerPose, refPose, layerInfo, weightSum, layerFlags);
+		
+		SetTransformFlags(totalFlags, transformFlags, rigBoneIndex);
 		animatedBonesBuffer[globalBoneIndex] = blendedBonePose;
-
 		if (rootMotionDeltaBone)
 			SetRootMotionStateToComponentBuffer(newRootMotionState, e);
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	BoneTransform BlendLayerPose(in BoneTransform curPose, BoneTransform layerPose, in BoneTransform refPose, in LayerInfo layerInfo, float weightSum, float3 layerFlags)
+	{
+		BoneTransform rv = curPose;
+		if (Hint.Likely(layerInfo.blendMode == AnimationBlendingMode.Override))
+		{
+			//	For override layers we need to apply reminder from the reference pose if layer total animation weight is not equal to one
+			if (Hint.Unlikely(weightSum < 1))
+				layerPose = AppendScaledPose(layerPose, refPose, math.max(0, 1 - weightSum));
+			    
+			if (Hint.Likely(layerFlags.x > 0))
+			{
+				rv.pos = math.lerp(curPose.pos, layerPose.pos, layerInfo.weight);
+			}
+			if (Hint.Likely(layerFlags.y > 0))
+			{
+				layerPose.rot = math.normalizesafe(layerPose.rot);
+				layerPose.rot = MathUtils.ShortestRotation(curPose.rot, layerPose.rot);
+				rv.rot = math.nlerp(curPose.rot.value, layerPose.rot.value, layerInfo.weight);
+			}
+			if (Hint.Likely(layerFlags.z > 0))
+			{
+				rv.scale = math.lerp(curPose.scale, layerPose.scale, layerInfo.weight);
+			}
+		}
+		else
+		{
+			if (Hint.Likely(layerFlags.x > 0))
+			{
+				rv.pos = curPose.pos + layerPose.pos * layerInfo.weight;
+			}
+			if (Hint.Likely(layerFlags.y > 0))
+			{
+				quaternion layerRot = math.normalizesafe(new float4(layerPose.rot.value.xyz * layerInfo.weight, layerPose.rot.value.w));
+				layerRot = MathUtils.ShortestRotation(curPose.rot, layerRot);
+				rv.rot = math.mul(curPose.rot, layerRot);
+			}
+			if (Hint.Likely(layerFlags.z > 0))
+			{
+				rv.scale = curPose.scale * math.lerp(1, layerPose.scale, layerInfo.weight);
+			}
+		}
+		return rv;
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	BoneTransform AppendScaledPose(in BoneTransform curPose, BoneTransform addedPose, float weight)
+	{
+		addedPose.rot = MathUtils.ShortestRotation(curPose.rot, addedPose.rot);
+		BoneTransform rv = new BoneTransform()
+		{
+			pos = curPose.pos + addedPose.pos * weight,
+			rot = new quaternion(curPose.rot.value + addedPose.rot.value * weight),
+			scale = curPose.scale + addedPose.scale * weight
+		};
+		return rv;
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -312,57 +382,43 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void MixPoses(ref BoneTransform curPose, BoneTransform inPose, float3 weight, AnimationBlendingMode blendMode)
+	BoneTransform MixPoses(in BoneTransform curPose, BoneTransform inPose, float3 flags, float weight, AnimationBlendingMode blendMode)
 	{
-		if (blendMode == AnimationBlendingMode.Override)
+		BoneTransform rv = curPose;
+		if (Hint.Likely(blendMode == AnimationBlendingMode.Override))
 		{
-			inPose.rot = MathUtils.ShortestRotation(curPose.rot, inPose.rot);
-			var scaledPose = BoneTransform.Scale(inPose, weight);
-
-			curPose.pos += scaledPose.pos;
-			curPose.rot.value += scaledPose.rot.value;
-			curPose.scale += scaledPose.scale;
+			if (Hint.Likely(flags.x > 0))
+			{
+				rv.pos = math.lerp(curPose.pos, inPose.pos, weight);
+			}
+			if (Hint.Likely(flags.y > 0))
+			{
+				inPose.rot = MathUtils.ShortestRotation(curPose.rot, inPose.rot);
+				rv.rot = math.nlerp(curPose.rot.value, inPose.rot.value, weight);
+			}
+			if (Hint.Likely(flags.z > 0))
+			{
+				rv.scale = math.lerp(curPose.scale, inPose.scale, weight);
+			}
 		}
 		else
 		{
-			curPose.pos += inPose.pos * weight.x;
-			quaternion layerRot = math.normalizesafe(new float4(inPose.rot.value.xyz * weight.y, inPose.rot.value.w));
-			layerRot = MathUtils.ShortestRotation(curPose.rot, layerRot);
-			curPose.rot = math.mul(layerRot, curPose.rot);
-			curPose.scale *= (1 - weight.z) + (inPose.scale * weight.z);
+			if (Hint.Likely(flags.x > 0))
+			{
+				rv.pos = curPose.pos + inPose.pos * weight;
+			}
+			if (Hint.Likely(flags.y > 0))
+			{
+				quaternion layerRot = math.normalizesafe(new float4(inPose.rot.value.xyz * weight, inPose.rot.value.w));
+				layerRot = MathUtils.ShortestRotation(curPose.rot, layerRot);
+				rv.rot = math.mul(curPose.rot, layerRot);
+			}
+			if (Hint.Likely(flags.z > 0))
+			{
+				rv.scale = curPose.scale * math.lerp(1, inPose.scale, weight);
+			}
 		}
-	}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	public static float CalculateFinalLayerWeights
-	(
-		in Span<float> layerWeights,
-		in DynamicBuffer<AnimationToProcessComponent> atp,
-		int boneIndex,
-		uint boneHash,
-		AvatarMaskBodyPart humanAvatarMaskBodyPart
-	)
-	{
-		var layerIndex = -1;
-		var w = 1.0f;
-
-		for (int i = atp.Length - 1; i >= 0; --i)
-		{
-			var a = atp[i];
-			if (a.layerIndex == layerIndex) continue;
-
-			var inAvatarMask = IsBoneInAvatarMask(boneIndex, humanAvatarMaskBodyPart, a.avatarMask);
-			var hasTrack = boneHash == 0 || (a.animation.IsCreated && a.animation.Value.clipTracks.GetTrackGroupIndex(boneHash) >= 0);
-			var layerWeight = inAvatarMask && hasTrack ? a.layerWeight : 0;
-
-			var lw = w * layerWeight;
-			layerWeights[a.layerIndex] = lw;
-			if (a.blendMode == AnimationBlendingMode.Override)
-				w -= lw;
-			layerIndex = a.layerIndex;
-		}
-		return atp[0].blendMode == AnimationBlendingMode.Override ? 0 : layerWeights[0];
+		return rv;
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -370,19 +426,6 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 	void ApplyHumanoidPostTransform(HumanRotationData hrd, ref BoneTransform bt)
 	{
 		bt.rot = math.mul(math.mul(hrd.preRot, bt.rot), hrd.postRot);
-	}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	void BoneTransformMakePretty(ref BoneTransform bt, BoneTransform refPose, float3 weights)
-	{
-		var complWeights = math.saturate(new float3(1) - weights);
-		bt.pos += refPose.pos * complWeights.x;
-		var shortestRefRot = MathUtils.ShortestRotation(bt.rot.value, refPose.rot.value);
-		bt.rot.value += shortestRefRot.value * complWeights.y;
-		bt.scale += refPose.scale * complWeights.z;
-
-		bt.rot = math.normalize(bt.rot);
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -468,7 +511,7 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 		rv.pos = rv.pos - zeroFramePose.pos;
 		var conjugateZFRot = math.normalizesafe(math.conjugate(zeroFramePose.rot));
 		conjugateZFRot = MathUtils.ShortestRotation(rv.rot, conjugateZFRot);
-		rv.rot = math.mul(math.normalize(rv.rot), conjugateZFRot);
+		rv.rot = math.mul(conjugateZFRot, rv.rot);
 		rv.scale = rv.scale / zeroFramePose.scale;
 	}
 
@@ -591,20 +634,15 @@ public struct ComputeBoneAnimationJob: IJobParallelForDefer
 [WithNone(typeof(GPUAnimationEngineTag))]
 partial struct ProcessAnimatorParameterCurveJob: IJobEntity
 {
-	unsafe void Execute(in DynamicBuffer<AnimationToProcessComponent> animationsToProcess, ref DynamicBuffer<AnimatorControllerParameterComponent> acpc)
+	void Execute(in DynamicBuffer<AnimationToProcessComponent> animationsToProcess, ref DynamicBuffer<AnimatorControllerParameterComponent> acpc)
 	{
 		if (animationsToProcess.IsEmpty) return;
 
-		//	Animations must be ordered by layer index
-		Span<float> layerWeights = stackalloc float[animationsToProcess[^1].layerIndex + 1];
-		ComputeBoneAnimationJob.CalculateFinalLayerWeights(layerWeights, animationsToProcess, -1, SpecialBones.AnimatorTypeNameHash, (AvatarMaskBodyPart)(-1));
-		
 		for (var i = 0; i < acpc.Length; ++i)
 		{
 			ref var p = ref acpc.ElementAt(i);
 			var parameterNameHash = Track.CalculateHash(p.hash);
-	
-			ComputeAnimatedProperty(ref p.value.floatValue, animationsToProcess.AsNativeArray(), layerWeights, SpecialBones.AnimatorTypeNameHash, parameterNameHash); 
+			p.value.floatValue = ComputeAnimatedProperty(p.value.floatValue, animationsToProcess.AsNativeArray(), SpecialBones.AnimatorTypeNameHash, parameterNameHash); 
         }
 	}
 }
@@ -629,17 +667,13 @@ partial struct AnimateBlendShapeWeightsJob: IJobEntity
 		
 		if (animationsToProcess.IsEmpty) return;
 
-		//	Animations must be ordered by layer index
-		Span<float> layerWeights = stackalloc float[animationsToProcess[^1].layerIndex + 1];
-		ComputeBoneAnimationJob.CalculateFinalLayerWeights(layerWeights, animationsToProcess, -1, 0, (AvatarMaskBodyPart)(-1));
-		
 		for (var i = 0; i < blendShapeWeights.Length; ++i)
 		{
 			ref var p = ref blendShapeWeights.ElementAt(i);
 			var bsi = asm.smrInfoBlob.Value.blendShapes[i].hash;
 			var parameterNameHash = Track.CalculateHash(bsi);
 	
-			ComputeAnimatedProperty(ref p.Value, animationsToProcess.AsNativeArray(), layerWeights, asm.nameHash, parameterNameHash); 
+			p.Value = ComputeAnimatedProperty(0, animationsToProcess.AsNativeArray(), asm.nameHash, parameterNameHash); 
         }
 	}
 	
@@ -823,6 +857,9 @@ partial struct CopyEntityBoneTransformsToAnimationBuffer: IJobEntity
 	public ComponentLookup<GPUAnimationEngineTag> gpuAnimationEngineTagLookup;
 	[ReadOnly]
 	public ComponentLookup<Parent> parentComponentLookup;
+	[ReadOnly]
+	public ComponentLookup<PostTransformMatrix> ptmComponentLookup;
+	
 	[NativeDisableContainerSafetyRestriction]
 	public NativeList<ulong> boneTransformFlags;
 
@@ -856,6 +893,9 @@ partial struct CopyEntityBoneTransformsToAnimationBuffer: IJobEntity
 		if (!math.any(boneFlags))
 		{
 			var entityPose = new BoneTransform(lt);
+			if (ptmComponentLookup.TryGetComponent(e, out var ptm))
+				entityPose = new BoneTransform(lt, ptm);
+			
 			//	Root motion delta should be zero
 			if (rdc.applyRootMotion && aer.boneIndexInAnimationRig == 0)
 				entityPose = BoneTransform.Identity();

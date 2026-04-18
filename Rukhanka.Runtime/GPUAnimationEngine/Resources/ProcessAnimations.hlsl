@@ -10,6 +10,15 @@ RWStructuredBuffer<BoneTransform> outAnimatedBones;
     
 /////////////////////////////////////////////////////////////////////////////////
 
+struct LayerInfo
+{
+    int index;
+    float weight;
+    int blendMode;
+};
+
+/////////////////////////////////////////////////////////////////////////////////
+
 float2 NormalizeAnimationTime(float at, AnimationClip ac)
 {
     at += ac.cycleOffset;
@@ -28,7 +37,7 @@ BoneTransform MakeAdditiveAnimation(BoneTransform bonePose, BoneTransform zeroFr
     rv.pos = bonePose.pos - zeroFramePose.pos;
     Quaternion conjugateZFRot = Quaternion::NormalizeSafe(Quaternion::Conjugate(zeroFramePose.rot));
     conjugateZFRot = Quaternion::ShortestRotation(bonePose.rot, conjugateZFRot);
-    rv.rot = Quaternion::Multiply(Quaternion::Normalize(bonePose.rot), conjugateZFRot);
+    rv.rot = Quaternion::Multiply(conjugateZFRot, Quaternion::Normalize(bonePose.rot));
     rv.scale = bonePose.scale / zeroFramePose.scale;
     return rv;
 }
@@ -101,75 +110,69 @@ bool SampleAnimation(AnimationClip ac, uint baseAddress, float2 animTime, int ri
 
 /////////////////////////////////////////////////////////////////////////////////
 
-BoneTransform MixPoses(BoneTransform curPose, BoneTransform inPose, float3 weight, int blendMode)
+BoneTransform AppendScaledPose(BoneTransform curPose, BoneTransform addedPose, float weight)
 {
-    //  Override
-    if (blendMode == BLEND_MODE_OVERRIDE)
-    {
-        inPose.rot = Quaternion::ShortestRotation(curPose.rot, inPose.rot);
-        BoneTransform scaledPose = BoneTransform::Scale(inPose, weight);
+    BoneTransform rv;
+    rv.pos = curPose.pos + addedPose.pos * weight;
+    rv.rot = Quaternion::Nlerp(curPose.rot, addedPose.rot, weight);
+    rv.scale = curPose.scale + addedPose.scale * weight;
+    return rv;
+}
 
-        curPose.pos += scaledPose.pos;
-        curPose.rot.value += scaledPose.rot.value;
-        curPose.scale += scaledPose.scale;
+/////////////////////////////////////////////////////////////////////////////////
+
+BoneTransform BlendLayerPose(BoneTransform curPose, BoneTransform layerPose, BoneTransform refPose, LayerInfo layerInfo, float weightSum, float3 layerFlags)
+{
+    BoneTransform rv = curPose;
+
+    //  Override
+    if (layerInfo.blendMode == BLEND_MODE_OVERRIDE)
+    {
+        if (weightSum < 1)
+            layerPose = AppendScaledPose(layerPose, refPose, max(0, 1 - weightSum));
+
+        if (layerFlags.x > 0)
+            rv.pos = lerp(curPose.pos, layerPose.pos, layerInfo.weight);
+
+        if (layerFlags.y > 0)
+        {
+            layerPose.rot = Quaternion::ShortestRotation(curPose.rot, layerPose.rot);
+            rv.rot = Quaternion::Nlerp(curPose.rot, layerPose.rot, layerInfo.weight);
+        }
+
+        if (layerFlags.z > 0)
+            rv.scale = lerp(curPose.scale, layerPose.scale, layerInfo.weight);
     }
     //  Additive
     else
     {
-        curPose.pos += inPose.pos * weight.x;
-        Quaternion layerRot;
-        layerRot.value = float4(inPose.rot.value.xyz * weight.y, inPose.rot.value.w);
-        layerRot = Quaternion::NormalizeSafe(layerRot);
-        layerRot = Quaternion::ShortestRotation(curPose.rot, layerRot);
-        curPose.rot = Quaternion::Multiply(layerRot, curPose.rot);
-        curPose.scale *= (1 - weight.z) + (inPose.scale * weight.z);
+        if (layerFlags.x > 0)
+            rv.pos = curPose.pos + layerPose.pos * layerInfo.weight;
+
+        if (layerFlags.y > 0)
+        {
+            Quaternion layerRot;
+            layerRot.value = float4(layerPose.rot.value.xyz * layerInfo.weight, layerPose.rot.value.w);
+            layerRot = Quaternion::NormalizeSafe(layerRot);
+            layerRot = Quaternion::ShortestRotation(curPose.rot, layerRot);
+            rv.rot = Quaternion::Multiply(curPose.rot, layerRot);
+        }
+
+        if (layerFlags.z > 0)
+            rv.scale = curPose.scale * lerp(1, layerPose.scale, layerInfo.weight);
     }
-    return curPose;
+    return rv;
 }
 
 /////////////////////////////////////////////////////////////////////////////////
 
-BoneTransform BoneTransformMakePretty(BoneTransform animatedBonePose, BoneTransform refBonePose, float3 weights)
+LayerInfo GetLayerInfoFromAnimation(AnimationToProcess atp)
 {
-    float3 complWeights = saturate(float3(1, 1, 1) - weights);
-    animatedBonePose.pos += refBonePose.pos * complWeights.x;
-    Quaternion shortestRefRot = Quaternion::ShortestRotation(animatedBonePose.rot, refBonePose.rot);
-    animatedBonePose.rot.value += shortestRefRot.value * complWeights.y;
-    animatedBonePose.scale += refBonePose.scale * complWeights.z;
-
-    animatedBonePose.rot = Quaternion::Normalize(animatedBonePose.rot);
-    return animatedBonePose;
-}
-
-/////////////////////////////////////////////////////////////////////////////////
-
-float CalculateFinalLayerWeights(out float layerWeights[NUM_MAXIMUM_LAYER_WEIGHTS], AnimationJob aj, int humanBodyPart, uint boneHash, int boneIndex)
-{
-    int layerIndex = -1;
-    float w = 1.0f;
-
-    for (int i = aj.animationsToProcessRange.y - 1; i >= 0; --i)
-    {
-        int atpIndex = aj.animationsToProcessRange.x + i;
-        AnimationToProcess a = animationsToProcess[atpIndex];
-        if (a.layerIndex == layerIndex) continue;
-
-        AnimationClip ac = AnimationClip::ReadFromRawBuffer(animationClips, a.animationClipAddress);
-        TrackSet tsClip = ac.clipTracks;
-        tsClip.OffsetByAddress(a.animationClipAddress);
-        
-        bool inAvatarMask = IsBoneInAvatarMask(a.avatarMaskDataOffset, humanBodyPart, boneIndex);
-		int hasTrack = tsClip.GetTrackGroupIndex(boneHash) >= 0;
-        float layerWeight = inAvatarMask && hasTrack ? a.layerWeight : 0;
-
-        float lw = w * layerWeight;
-        layerWeights[a.layerIndex] = lw;
-        if (a.blendMode == BLEND_MODE_OVERRIDE)
-            w -= lw;
-        layerIndex = a.layerIndex;
-    }
-    AnimationToProcess atp0 = animationsToProcess[aj.animationsToProcessRange.x];
-    return atp0.blendMode == BLEND_MODE_OVERRIDE ? 0 : layerWeights[0];
+    LayerInfo rv;
+    rv.weight = atp.layerWeight;
+    rv.blendMode = atp.blendMode;
+    rv.index = atp.layerIndex;
+    return rv;
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -189,23 +192,35 @@ void ProcessAnimations(uint tid: SV_DispatchThreadID)
     RigDefinition rigDef = RigDefinition::ReadFromRawBuffer(rigDefinitions, animationJob.rigDefinitionIndex);
     RigBone rigBone = RigBone::ReadFromRawBuffer(rigBones, rigDef.rigBonesRange.x + boneWorkload.boneIndexInRig);
 
-    float layerWeights[NUM_MAXIMUM_LAYER_WEIGHTS];
-    float refPoseWeight = CalculateFinalLayerWeights(layerWeights, animationJob, rigBone.humanBodyPart, rigBone.hash, boneWorkload.boneIndexInRig);
-    float3 totalWeights = refPoseWeight;
-
-	BoneTransform blendedBonePose = BoneTransform::Scale(rigBone.refPose, refPoseWeight);
-
     HumanRotationData hrd = (HumanRotationData)0;
     if (rigDef.humanRotationDataRange.x >= 0)
         hrd = HumanRotationData::ReadFromRawBuffer(humanRotationDataBuffer, rigDef.humanRotationDataRange.x + boneWorkload.boneIndexInRig);
+
+	BoneTransform blendedBonePose = rigBone.refPose;
+    BoneTransform layerPose = BoneTransform::Zero();
+    float weightSum = 0;
+    float3 layerFlags = 0;
+    LayerInfo layerInfo = (LayerInfo)0;
 
     int atpIndexStart = animationJob.animationsToProcessRange.x;
     int atpIndexEnd = animationJob.animationsToProcessRange.x + animationJob.animationsToProcessRange.y;
     for (int i = atpIndexStart; i < atpIndexEnd; ++i)
     {
         AnimationToProcess atp = animationsToProcess[i];
-        if (atp.animationClipAddress < 0)
+        bool inAvatarMask = IsBoneInAvatarMask(atp.avatarMaskDataOffset, rigBone.humanBodyPart, boneWorkload.boneIndexInRig);
+
+        if (atp.animationClipAddress < 0 || atp.weight == 0 || atp.layerWeight == 0 || !inAvatarMask)
             continue;
+
+        LayerInfo curLayerInfo = GetLayerInfoFromAnimation(atp);
+        if (layerInfo.index != curLayerInfo.index)
+        {
+            blendedBonePose = BlendLayerPose(blendedBonePose, layerPose, rigBone.refPose, layerInfo, weightSum, layerFlags);
+            weightSum = 0;
+            layerFlags = 0;
+            layerPose = BoneTransform::Zero();
+        }
+        layerInfo = curLayerInfo;
 
         int baseAddress = atp.animationClipAddress;
         AnimationClip ac = AnimationClip::ReadFromRawBuffer(animationClips, baseAddress);
@@ -214,14 +229,14 @@ void ProcessAnimations(uint tid: SV_DispatchThreadID)
         BoneTransformAndFlags btf;
         if (SampleAnimation(ac, baseAddress, animTime, boneWorkload.boneIndexInRig, rigBone.hash, atp.blendMode, hrd, btf))
         {
-            float3 weight = btf.flags * atp.weight * layerWeights[atp.layerIndex];
-            if (atp.blendMode == BLEND_MODE_OVERRIDE)
-                totalWeights += weight;
-            blendedBonePose = MixPoses(blendedBonePose, btf.bt, weight, atp.blendMode);
+            weightSum += atp.weight;
+            layerFlags += btf.flags;
+            layerPose = AppendScaledPose(layerPose, btf.bt, atp.weight);
         }
     }
 
-    blendedBonePose = BoneTransformMakePretty(blendedBonePose, rigBone.refPose, totalWeights);
+    blendedBonePose = BlendLayerPose(blendedBonePose, layerPose, rigBone.refPose, layerInfo, weightSum, layerFlags);
+
     int outIndex = animationJob.animatedBoneIndexOffset + boneWorkload.boneIndexInRig;
 
     CHECK_STRUCTURED_BUFFER_OUT_OF_BOUNDS(RUKHANKADEBUGMARKERS_GPUANIMATOR_PROCESS_ANIMATIONS_OUT_ANIMATED_BONES_WRITE, outIndex, outAnimatedBones);

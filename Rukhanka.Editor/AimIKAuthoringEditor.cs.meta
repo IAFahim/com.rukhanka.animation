@@ -4,8 +4,7 @@ MonoImporter:
   externalObjects: {}
   serializedVersion: 2
   defaultReferences:
-  - inpectorXML: {fileID: 9197481963319205126, guid: cf4d33380a26ecf4ea08af1e93763d81,
-      type: 3}
+  - inpectorXML: {fileID: 9197481963319205126, guid: cf4d33380a26ecf4ea08af1e93763d81, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
@@ -15,6 +14,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 298480
   packageName: Rukhanka Animation System 2
-  packageVersion: 2.8.0
+  packageVersion: 2.9.0
   assetPath: Packages/com.rukhanka.animation/Rukhanka.Editor/AimIKAuthoringEditor.cs
-  uploadId: 860362
+  uploadId: 897522

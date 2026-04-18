@@ -52,7 +52,7 @@ public class SparseUploaderPool: IDisposable
         }
         else
         {
-            rv = new SparseUploader(null);
+            rv = new SparseUploader(gb);
             allUploaders.Add(rv);
             Assert.IsTrue(allUploaders.Count < 0xff, "Looks like 'PutUploader' call is forgotten somewhere! There are too much of created uploaders.");
         }

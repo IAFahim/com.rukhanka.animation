@@ -160,7 +160,7 @@ struct Quaternion
 
 /////////////////////////////////////////////////////////////////////////////////
 
-    static float4 ChageSign(float4 a, float4 b)
+    static float4 ChangeSign(float4 a, float4 b)
     {
          return asfloat(asuint(a) ^ asuint(b) & 0x80000000);
     }
@@ -179,7 +179,7 @@ struct Quaternion
     static Quaternion Nlerp(Quaternion a, Quaternion b, float t)
     {
         Quaternion rv;
-        rv.value = normalize(a.value + t * (ChageSign(b.value, dot(a.value, b.value)) - a.value));
+        rv.value = normalize(a.value + t * (ChangeSign(b.value, dot(a.value, b.value)) - a.value));
         return rv;
     }
 

@@ -1,3 +1,4 @@
+using Unity.Mathematics;
 using UnityEngine;
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +27,22 @@ public static class ColorTools
     {
         Color32 c32 = c;
         var rv = $"#{c32.r:X2}{c32.g:X2}{c32.b:X2}";
+        return rv;
+    }
+    
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    public static uint ToUint(float4 cl)
+    {
+        uint rv = (uint)(cl.x * 255) << 24 | (uint)(cl.y * 255) << 16 | (uint)(cl.z * 255) << 8 | (uint)(cl.w * 255);
+        return rv;
+    }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    public static uint ToUint(Color cl)
+    {
+        uint rv = (uint)(cl.r * 255) << 24 | (uint)(cl.g * 255) << 16 | (uint)(cl.b * 255) << 8 | (uint)(cl.a * 255);
         return rv;
     }
 }

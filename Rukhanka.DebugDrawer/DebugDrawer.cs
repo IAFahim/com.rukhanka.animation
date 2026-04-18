@@ -61,22 +61,6 @@ public struct Drawer: IComponentData
     
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    public static uint ColorToUINT(float4 cl)
-    {
-        uint rv = (uint)(cl.x * 255) << 24 | (uint)(cl.y * 255) << 16 | (uint)(cl.z * 255) << 8 | (uint)(cl.w * 255);
-        return rv;
-    }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    public static uint ColorToUINT(Color cl)
-    {
-        uint rv = (uint)(cl.r * 255) << 24 | (uint)(cl.g * 255) << 16 | (uint)(cl.b * 255) << 8 | (uint)(cl.a * 255);
-        return rv;
-    }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     int GetWriteIndex(int numPrimitivesToDraw, UnsafeAtomicCounter32 counter, int maxCount)
     {
         var writeIndex = counter.Add(numPrimitivesToDraw);

@@ -5,12 +5,9 @@ MonoImporter:
   serializedVersion: 2
   defaultReferences:
   - m_ViewDataDictionary: {instanceID: 0}
-  - visualTreeAsset: {fileID: 9197481963319205126, guid: 06c6e9527627135448712b749ece8773,
-      type: 3}
-  - boneInfoAsset: {fileID: 9197481963319205126, guid: c9320b9b2ed0f1942a921cdc76fd4072,
-      type: 3}
-  - entityRefAsset: {fileID: 9197481963319205126, guid: dba65a86cda2861448a7ae7891041b16,
-      type: 3}
+  - visualTreeAsset: {fileID: 9197481963319205126, guid: 06c6e9527627135448712b749ece8773, type: 3}
+  - boneInfoAsset: {fileID: 9197481963319205126, guid: c9320b9b2ed0f1942a921cdc76fd4072, type: 3}
+  - entityRefAsset: {fileID: 9197481963319205126, guid: dba65a86cda2861448a7ae7891041b16, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
@@ -20,6 +17,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 298480
   packageName: Rukhanka Animation System 2
-  packageVersion: 2.8.0
+  packageVersion: 2.9.0
   assetPath: Packages/com.rukhanka.animation/Rukhanka.Editor/BlobInspector/SkinnedMeshBlobInfoWindow/SkinnedMeshBlobInfoWindow.cs
-  uploadId: 860362
+  uploadId: 897522

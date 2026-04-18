@@ -259,8 +259,8 @@ public partial class SkinnedMeshBaker: Baker<SkinnedMeshRenderer>
 		var rbb = a.localBounds.ToAABB();
 		if (a.rootBone != null)
 		{
-			var rootBoneLocalMat = float4x4.TRS(a.rootBone.localPosition, a.rootBone.localRotation, a.rootBone.localScale);
-			rbb = AABB.Transform(rootBoneLocalMat, rbb);
+			var boundsTransform = math.mul(a.transform.worldToLocalMatrix, a.rootBone.localToWorldMatrix);
+			rbb = AABB.Transform(boundsTransform, rbb);
 		}
 		SetComponent(renderEntity, new RenderBounds { Value = rbb });
 	}
@@ -320,70 +320,6 @@ public partial class SkinnedMeshBaker: Baker<SkinnedMeshRenderer>
 		UnsafeAddComponent(renderEntity, mrbdTypeIndex, typeInfo.TypeSize, untypedComponentData);
 	}
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	unsafe void CreateRenderComponents2(SkinnedMeshRenderer a)
-	{
-		//	To bake skinned mesh using builtin Entities.Graphics methods, I need to do many reflection magic because all baking stuff
-		//	og EG is private.
-		//	All this equivalent to the following:
-		//
-		//	{
-		//		Unity.Rendering.MeshRendererBakingUtility.ConvertConvertToMultipleEntities(...);
-		//		var entity = GetEntity(a, TransformUsageFlags.Renderable);
-		//		AddComponent(entity, new Unity.Rendering.MeshRendererBakingData() { MeshRenderer = authoring });
-		//	}
-		
-        var entitiesGraphicsSystemType = typeof(EntitiesGraphicsSystem);
-        
-        var meshRendererBakingUtilityTypeName = "Unity.Rendering.MeshRendererBakingUtility";
-        var meshRendererBakingUtilityType = entitiesGraphicsSystemType.Assembly.GetType(meshRendererBakingUtilityTypeName);
-		if (meshRendererBakingUtilityType == null)
-			throw new NullReferenceException($"Cannot find '{meshRendererBakingUtilityTypeName}'");
-		
-        var cvtMethodName = "ConvertOnPrimaryEntity";
-        var convertNumParameters = 3;
-        MethodInfo cvtMethod = null;
-		var cvtMethods = meshRendererBakingUtilityType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic);
-		for (var i = 0; i < cvtMethods.Length; ++i)
-		{
-			var m = cvtMethods[i];
-			var methodParams = m.GetParameters();
-			if (m.Name == cvtMethodName && methodParams.Length == convertNumParameters)
-			{
-				cvtMethod = m;
-				break;
-			}
-		}
-		if (cvtMethod == null)
-			throw new NullReferenceException($"Cannot find method '{cvtMethodName}' in '{meshRendererBakingUtilityTypeName}'");
-		
-		var cvtMethodGenericInstantiation = cvtMethod.MakeGenericMethod(typeof(SkinnedMeshRenderer));
-		
-		var callParameters = new object[] { this, a, a.sharedMesh };
-		cvtMethodGenericInstantiation.Invoke(null, callParameters);
-		
-		var e = GetEntity(a, TransformUsageFlags.Renderable);
-		var rbb = a.localBounds.ToAABB();
-		if (a.rootBone != null)
-		{
-			var rootBoneLocalMat = float4x4.TRS(a.rootBone.localPosition, a.rootBone.localRotation, a.rootBone.localScale);
-			rbb = AABB.Transform(rootBoneLocalMat, rbb);
-		}
-		AddComponent<DeformedMeshIndex>(e);
-		SetComponent(e, new RenderBounds { Value = rbb });
-		
-		var meshRendererBakingDataTypeName = "Unity.Rendering.MeshRendererBakingData";
-        var meshRendererBakingDataType = entitiesGraphicsSystemType.Assembly.GetType(meshRendererBakingDataTypeName);
-		var mrbdTypeIndex = TypeManager.GetTypeIndex(meshRendererBakingDataType);
-		var typeInfo = TypeManager.GetTypeInfo(mrbdTypeIndex);
-        var untypedComponentData = UnsafeUtility.Malloc(typeInfo.TypeSize, typeInfo.AlignmentInBytes, Allocator.Temp);
-        UnityObjectRef<Renderer> meshRenderer = a;
-        UnsafeUtility.MemCpy(untypedComponentData, &meshRenderer, typeInfo.TypeSize);
-        
-		UnsafeAddComponent(e, mrbdTypeIndex, typeInfo.TypeSize, untypedComponentData);
-	}
-	
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void CreateSkinMatricesBuffer(Entity e, SkinnedMeshRenderer a)
