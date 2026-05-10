@@ -13,7 +13,7 @@ namespace Rukhanka.Hybrid
 { 
 public class AvatarMaskBaker
 {
-	internal BlobAssetReference<AvatarMaskBakingDataBlob> CreateAvatarMaskBlob(IBaker baker, AvatarMask am, RigDefinitionAuthoring rd)
+	public BlobAssetReference<AvatarMaskBakingDataBlob> CreateAvatarMaskBlob(IBaker baker, AvatarMask am, RigDefinitionAuthoring rd)
 	{
 		if (am == null)
 			return default;

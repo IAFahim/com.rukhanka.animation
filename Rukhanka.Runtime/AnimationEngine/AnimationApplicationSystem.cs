@@ -14,7 +14,7 @@ namespace Rukhanka
 
 [DisableAutoCreation]
 [UpdateAfter(typeof(RukhankaAnimationInjectionSystemGroup))]
-partial struct AnimationApplicationSystem: ISystem
+public partial struct AnimationApplicationSystem: ISystem
 {
 	private EntityQuery
 		boneObjectEntitiesWithParentQuery,

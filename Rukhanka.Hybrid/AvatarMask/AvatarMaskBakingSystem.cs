@@ -8,7 +8,7 @@ using Unity.Mathematics;
 namespace Rukhanka.Hybrid
 { 
 
-internal struct AvatarMaskBakingDataBlob
+public struct AvatarMaskBakingDataBlob
 {
 #if RUKHANKA_DEBUG_INFO
 	public BlobString name;
@@ -23,7 +23,7 @@ internal struct AvatarMaskBakingDataBlob
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 [TemporaryBakingType]
-internal struct AvatarMaskBakingData: IBufferElementData
+public struct AvatarMaskBakingData: IBufferElementData
 {
 	public Entity rigEntity;
 	public BlobAssetReference<AvatarMaskBakingDataBlob> dataBlob;
